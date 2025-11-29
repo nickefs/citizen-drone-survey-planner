@@ -6,23 +6,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
   <style>
     html, body { height:100%; margin:0; }
-    .leaflet-top.leaflet-left { margin-top: 70px; }
+    .leaflet-top.leaflet-left { margin-top: 60px; }
 
+    /* ---------- SMALLER TOPBAR ---------- */
     #topbar {
       position: fixed;
       z-index: 1000;
-      top: 12px;
-      left: 10px; /* αριστερά 10px */
+      top: 10px;
+      left: 10px;
       background: rgba(255,255,255,0.95);
-      padding: 8px 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,.15);
+      padding: 4px 8px;          /* μικρότερο */
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
       font-family: system-ui, sans-serif;
       display:flex;
-      gap:10px;
+      gap:6px;
       align-items:center;
+      transform: scale(0.90);    /* μικραίνει όλη τη μπάρα */
+      transform-origin: top left;
     }
 
     #map { height: 100%; }
@@ -43,18 +47,46 @@
     }
 
     .pill { font-size:12px; color:#555; }
+
+    /* ---------- ROUND FLOATING BUTTON ---------- */
+    #floatingSurveyBtn {
+      position: fixed;
+      top: 330px;   /* φαίνεται κάτω από το delete tool */
+      left: 7px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: #0084ff;
+      color: white;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      z-index: 1200;
+    }
+
+    #floatingSurveyBtn:hover {
+      background: #006fe0;
+    }
   </style>
 </head>
+
 <body>
+
+  <!-- Topbar (smaller now) -->
   <div id="topbar">
     <span class="pill">Default Alt (m):</span>
     <input id="altInput" type="number" value="10" step="1" />
+
     <button id="exportCsvBtn">Export CSV</button>
     <button id="exportGeoJsonBtn">Export GeoJSON</button>
-    <button onclick="sendPolygonToServer()" id="generateSurveyBtn">
-      Generate Survey (Server)
-    </button>
+
+    <!-- Generate Survey REMOVED from here -->
   </div>
+
+  <!-- ROUND FLOATING BUTTON -->
+  <button id="floatingSurveyBtn" onclick="sendPolygonToServer()">▶</button>
 
   <div id="map"></div>
 
@@ -64,10 +96,11 @@
   <script>
     const DEFAULT_ALT = 10;
     let lastWaypoints = [];
+
     // Map
     const map = L.map('map', { maxZoom: 22 }).setView([39.101418, 26.440039], 17);
 
-    // Basemaps
+    // Basemap (Satellite only)
     const esriSat = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       {
@@ -78,27 +111,10 @@
       }
     ).addTo(map);
 
-    const osmStreets = L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
-        minZoom: 3,
-        maxNativeZoom: 18,
-        maxZoom: 22,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-      }
-    );
-
-    L.control.layers(
-      { "🛰️ Satellite (Esri)": esriSat, "🗺️ Streets (OSM)": osmStreets },
-      null,
-      { position: 'topright' }
-    ).addTo(map);
-
-    // Draw layer & controls
+    // Draw layers
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    // Layer για τα survey waypoints
     const surveyLayer = new L.FeatureGroup();
     map.addLayer(surveyLayer);
 
@@ -111,34 +127,28 @@
 
     // Events
     map.on(L.Draw.Event.CREATED, e => {
-       const layer = e.layer;
+      const layer = e.layer;
       layer.feature = layer.feature || { type:'Feature', properties:{} };
       layer.feature.properties.type = guessType(layer);
       layer.feature.properties.alt_m = DEFAULT_ALT;
       drawnItems.addLayer(layer);
-
-  // Νέο polygon ⇒ παλιό survey δεν ισχύει
-  surveyLayer.clearLayers();
-  });
-
-   map.on(L.Draw.Event.EDITED, e => {
-     e.layers.eachLayer(layer => {
-      layer.feature = layer.feature || { type:'Feature', properties:{} };
-      if (!layer.feature.properties.type)
-        layer.feature.properties.type = guessType(layer);
-      if (typeof layer.feature.properties.alt_m !== 'number')
-        layer.feature.properties.alt_m = DEFAULT_ALT;
+      surveyLayer.clearLayers();
     });
 
-  // Μετακινήθηκε/άλλαξε το polygon ⇒ καθάρισε survey
-   surveyLayer.clearLayers();
-  });
+    map.on(L.Draw.Event.EDITED, e => {
+      e.layers.eachLayer(layer => {
+        layer.feature = layer.feature || { type:'Feature', properties:{} };
+        if (!layer.feature.properties.type)
+          layer.feature.properties.type = guessType(layer);
+        if (typeof layer.feature.properties.alt_m !== 'number')
+          layer.feature.properties.alt_m = DEFAULT_ALT;
+      });
+      surveyLayer.clearLayers();
+    });
 
-   map.on(L.Draw.Event.DELETED, e => {
-    // Delete polygon ⇒ σβήσε και όλα τα survey waypoints
-  surveyLayer.clearLayers();
-  });
-          
+    map.on(L.Draw.Event.DELETED, () => {
+      surveyLayer.clearLayers();
+    });
 
     function guessType(layer) {
       if (layer instanceof L.Marker) return 'Point';
@@ -147,23 +157,7 @@
       return 'Unknown';
     }
 
-    // --- Export helpers ---
-    function toGeoJSONCollection() {
-      const features = [];
-      drawnItems.eachLayer(layer => {
-        if (layer.toGeoJSON) {
-          const gj = layer.toGeoJSON();
-          gj.properties = Object.assign(
-            {},
-            (layer.feature && layer.feature.properties) || {},
-            gj.properties || {}
-          );
-          features.push(gj);
-        }
-      });
-      return { type:'FeatureCollection', features };
-    }
-
+    // Export helpers
     function download(filename, text) {
       const blob = new Blob([text], { type:'application/octet-stream' });
       const url = URL.createObjectURL(blob);
@@ -174,65 +168,45 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    // ✅ Έλεγχος: επιτρέπεται export μόνο αν υπάρχει τουλάχιστον 1 Πολύγωνο
-    function hasAnyPolygon() {
-      let found = false;
-      drawnItems.eachLayer(layer => {
-        if (layer instanceof L.Polygon) {
-          const rings = layer.getLatLngs();
-          const outer = Array.isArray(rings) ? rings[0] : [];
-          if (Array.isArray(outer) && outer.length >= 3) {
-            found = true;
-          }
-        }
+    function exportCSV() {
+      if (!lastWaypoints.length) {
+        alert("No waypoints received yet. Press the blue ▶ button.");
+        return;
+      }
+
+      let rows = ['lat,lon,alt_m'];
+
+      lastWaypoints.forEach((wp) => {
+        const lat = Number(wp.lat);
+        const lon = Number(wp.lon);
+        const alt = (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT;
+        rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt}`);
       });
-      return found;
+
+      download('survey_waypoints.csv', rows.join('\n'));
     }
-
-function exportCSV() {
-  if (!lastWaypoints.length) {
-    alert("No waypoints received from the server yet. Please press 'Generate Survey (Server)' first.");
-    return;
-  }
-
-  let rows = ['lat,lon,alt_m'];
-
-  lastWaypoints.forEach((wp) => {
-    const lat = Number(wp.lat);
-    const lon = Number(wp.lon);
-    const alt = (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT;
-
-    rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt}`);
-  });
-
-  download('survey_waypoints.csv', rows.join('\n'));
-}
 
     function exportGeoJSON() {
-  if (!lastWaypoints.length) {
-    alert("No waypoints received from the server yet. Please press 'Generate Survey (Server)' first.");
-    return;
-  }
+      if (!lastWaypoints.length) {
+        alert("No waypoints received yet. Press the blue ▶ button.");
+        return;
+      }
 
-  const features = lastWaypoints.map((wp, idx) => ({
-    type: "Feature",
-    properties: {
-      index: idx,
-      alt_m: (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT
-    },
-    geometry: {
-      type: "Point",
-      coordinates: [Number(wp.lon), Number(wp.lat)]  // GeoJSON: [lon, lat]
+      const features = lastWaypoints.map((wp, idx) => ({
+        type: "Feature",
+        properties: {
+          index: idx,
+          alt_m: (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [Number(wp.lon), Number(wp.lat)]
+        }
+      }));
+
+      const fc = { type:"FeatureCollection", features };
+      download('survey_waypoints.geojson', JSON.stringify(fc, null, 2));
     }
-  }));
-
-  const fc = {
-    type: "FeatureCollection",
-    features
-  };
-
-  download('survey_waypoints.geojson', JSON.stringify(fc, null, 2));
-}
 
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJSON);
@@ -240,30 +214,17 @@ function exportCSV() {
     function getMainPolygonLatLngs() {
       let polygonLayer = null;
 
-      // Βρίσκουμε το πρώτο Polygon που έχεις σχεδιάσει
       drawnItems.eachLayer(layer => {
-        if (layer instanceof L.Polygon && !polygonLayer) {
-          polygonLayer = layer;
-        }
+        if (layer instanceof L.Polygon && !polygonLayer) polygonLayer = layer;
       });
 
-      if (!polygonLayer) {
-        return null;
-      }
+      if (!polygonLayer) return null;
 
-      // Παίρνουμε το εξωτερικό δαχτυλίδι του polygon
       const rings = polygonLayer.getLatLngs();
       const outer = Array.isArray(rings) ? rings[0] : rings;
+      if (!outer || outer.length < 3) return null;
 
-      if (!outer || outer.length < 3) {
-        return null;
-      }
-
-      // Το γυρνάμε σε απλή λίστα από {lat, lon}
-      return outer.map(p => ({
-        lat: p.lat,
-        lon: p.lng
-      }));
+      return outer.map(p => ({ lat: p.lat, lon: p.lng }));
     }
 
     async function sendPolygonToServer() {
@@ -282,13 +243,10 @@ function exportCSV() {
       });
 
       const data = await res.json();
+      lastWaypoints = Array.isArray(data.waypoints) ? data.waypoints : [];
 
-      console.log("Waypoints from server:", data.waypoints);
-      lastWaypoints = Array.isArray(data.waypoints) ? data.waypoints : [];   
-      // Καθαρίζουμε τα παλιά survey waypoints
       surveyLayer.clearLayers();
 
-      // Αν έχεις waypoints, τα ζωγραφίζουμε
       if (Array.isArray(data.waypoints) && data.waypoints.length > 0) {
         const latlngs = [];
 
@@ -296,21 +254,16 @@ function exportCSV() {
           const latlng = [wp.lat, wp.lon];
           latlngs.push(latlng);
 
-          // Μικρό marker για κάθε waypoint
-          L.circleMarker(latlng, {
-            radius: 3
-          }).addTo(surveyLayer);
+          L.circleMarker(latlng, { radius: 3 }).addTo(surveyLayer);
         });
 
-        // Προαιρετικά: polyline που ενώνει τα waypoints
-        L.polyline(latlngs, { dashArray: "4 4" }).addTo(surveyLayer);
-
-        // Zoom ώστε να φαίνονται
+        L.polyline(latlngs, { dashArray:"4 4" }).addTo(surveyLayer);
         map.fitBounds(L.latLngBounds(latlngs));
       }
 
-      alert("Received " + data.waypoints.length + " waypoints from backend!");
+      alert("Received " + data.waypoints.length + " waypoints!");
     }
   </script>
+
 </body>
 </html>
