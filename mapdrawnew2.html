@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Survey Planner (Esri Satellite + Alt 10m)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <style>
+    html, body { height:100%; margin:0; }
+    .leaflet-top.leaflet-left { margin-top: 70px; }
+
+    #topbar {
+      position: fixed;
+      z-index: 1000;
+      top: 12px;
+      left: 10px; /* αριστερά 10px */
+      background: rgba(255,255,255,0.95);
+      padding: 8px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.15);
+      font-family: system-ui, sans-serif;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    #map { height: 100%; }
+
+    button {
+      padding:6px 10px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      background:#f6f6f6;
+      cursor:pointer;
+    }
+
+    button:hover { background:#eee; }
+
+    input[type="number"] {
+      width: 90px;
+      padding:4px 6px;
+    }
+
+    .pill { font-size:12px; color:#555; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <span class="pill">Default Alt (m):</span>
+    <input id="altInput" type="number" value="10" step="1" />
+    <button id="exportCsvBtn">Export CSV</button>
+    <button id="exportGeoJsonBtn">Export GeoJSON</button>
+    <button onclick="sendPolygonToServer()" id="generateSurveyBtn">
+      Generate Survey (Server)
+    </button>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+  <script>
+    const DEFAULT_ALT = 10;
+
+    // Map
+    const map = L.map('map').setView([39.101418, 26.440039], 17);
+
+    // Basemaps
+    const esriSat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        minZoom: 3,
+        maxZoom: 19,
+        attribution: 'Imagery © <a href="https://www.esri.com/">Esri</a>'
+      }
+    ).addTo(map);
+
+    const osmStreets = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+        minZoom: 3,
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+      }
+    );
+
+    L.control.layers(
+      { "🛰️ Satellite (Esri)": esriSat, "🗺️ Streets (OSM)": osmStreets },
+      null,
+      { position: 'topright' }
+    ).addTo(map);
+
+    // Draw layer & controls
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Layer για τα survey waypoints
+    const surveyLayer = new L.FeatureGroup();
+    map.addLayer(surveyLayer);
+
+    const drawControl = new L.Control.Draw({
+      position: 'topleft',
+      draw: { rectangle:false, circle:false, circlemarker:false },
+      edit: { featureGroup: drawnItems, remove: true }
+    });
+    map.addControl(drawControl);
+
+    // Events
+    map.on(L.Draw.Event.CREATED, e => {
+       const layer = e.layer;
+      layer.feature = layer.feature || { type:'Feature', properties:{} };
+      layer.feature.properties.type = guessType(layer);
+      layer.feature.properties.alt_m = DEFAULT_ALT;
+      drawnItems.addLayer(layer);
+
+  // Νέο polygon ⇒ παλιό survey δεν ισχύει
+  surveyLayer.clearLayers();
+  });
+
+   map.on(L.Draw.Event.EDITED, e => {
+     e.layers.eachLayer(layer => {
+      layer.feature = layer.feature || { type:'Feature', properties:{} };
+      if (!layer.feature.properties.type)
+        layer.feature.properties.type = guessType(layer);
+      if (typeof layer.feature.properties.alt_m !== 'number')
+        layer.feature.properties.alt_m = DEFAULT_ALT;
+    });
+
+  // Μετακινήθηκε/άλλαξε το polygon ⇒ καθάρισε survey
+   surveyLayer.clearLayers();
+  });
+
+   map.on(L.Draw.Event.DELETED, e => {
+    // Delete polygon ⇒ σβήσε και όλα τα survey waypoints
+  surveyLayer.clearLayers();
+  });
+          
+
+    function guessType(layer) {
+      if (layer instanceof L.Marker) return 'Point';
+      if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) return 'LineString';
+      if (layer instanceof L.Polygon) return 'Polygon';
+      return 'Unknown';
+    }
+
+    // --- Export helpers ---
+    function toGeoJSONCollection() {
+      const features = [];
+      drawnItems.eachLayer(layer => {
+        if (layer.toGeoJSON) {
+          const gj = layer.toGeoJSON();
+          gj.properties = Object.assign(
+            {},
+            (layer.feature && layer.feature.properties) || {},
+            gj.properties || {}
+          );
+          features.push(gj);
+        }
+      });
+      return { type:'FeatureCollection', features };
+    }
+
+    function download(filename, text) {
+      const blob = new Blob([text], { type:'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // ✅ Έλεγχος: επιτρέπεται export μόνο αν υπάρχει τουλάχιστον 1 Πολύγωνο
+    function hasAnyPolygon() {
+      let found = false;
+      drawnItems.eachLayer(layer => {
+        if (layer instanceof L.Polygon) {
+          const rings = layer.getLatLngs();
+          const outer = Array.isArray(rings) ? rings[0] : [];
+          if (Array.isArray(outer) && outer.length >= 3) {
+            found = true;
+          }
+        }
+      });
+      return found;
+    }
+
+    function exportCSV() {
+      if (!hasAnyPolygon()) {
+        alert("Export is only available after you finish drawing at least one polygon.");
+        return;
+      }
+
+      let rows = ['lat,lon,type,alt_m'];
+      drawnItems.eachLayer(layer => {
+        const props = (layer.feature && layer.feature.properties) || {};
+        const typ = props.type || guessType(layer);
+        const alt = (typeof props.alt_m === 'number') ? props.alt_m : DEFAULT_ALT;
+
+        if (layer instanceof L.Marker) {
+          const c = layer.getLatLng();
+          rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},${typ},${alt}`);
+        } else if (layer instanceof L.Polygon) {
+          const latlngs = (layer.getLatLngs()[0] || []);
+          latlngs.forEach((c, i) =>
+            rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},PolygonVertex#${i+1},${alt}`)
+          );
+        } else if (layer instanceof L.Polyline) {
+          const latlngs = layer.getLatLngs();
+          latlngs.forEach((c, i) =>
+            rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},LineVertex#${i+1},${alt}`)
+          );
+        }
+      });
+      download('waypoints.csv', rows.join('\n'));
+    }
+
+    function exportGeoJSON() {
+      if (!hasAnyPolygon()) {
+        alert("Export is only available after you finish drawing at least one polygon.");
+        return;
+      }
+      const fc = toGeoJSONCollection();
+      download('features.geojson', JSON.stringify(fc, null, 2));
+    }
+
+    document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
+    document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJSON);
+
+    function getMainPolygonLatLngs() {
+      let polygonLayer = null;
+
+      // Βρίσκουμε το πρώτο Polygon που έχεις σχεδιάσει
+      drawnItems.eachLayer(layer => {
+        if (layer instanceof L.Polygon && !polygonLayer) {
+          polygonLayer = layer;
+        }
+      });
+
+      if (!polygonLayer) {
+        return null;
+      }
+
+      // Παίρνουμε το εξωτερικό δαχτυλίδι του polygon
+      const rings = polygonLayer.getLatLngs();
+      const outer = Array.isArray(rings) ? rings[0] : rings;
+
+      if (!outer || outer.length < 3) {
+        return null;
+      }
+
+      // Το γυρνάμε σε απλή λίστα από {lat, lon}
+      return outer.map(p => ({
+        lat: p.lat,
+        lon: p.lng
+      }));
+    }
+
+    async function sendPolygonToServer() {
+      const polygon = getMainPolygonLatLngs();
+      if (!polygon) {
+        alert("Draw a polygon first!");
+        return;
+      }
+
+      const payload = { polygon };
+
+      const res = await fetch("/api/survey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      console.log("Waypoints from server:", data.waypoints);
+
+      // Καθαρίζουμε τα παλιά survey waypoints
+      surveyLayer.clearLayers();
+
+      // Αν έχεις waypoints, τα ζωγραφίζουμε
+      if (Array.isArray(data.waypoints) && data.waypoints.length > 0) {
+        const latlngs = [];
+
+        data.waypoints.forEach((wp) => {
+          const latlng = [wp.lat, wp.lon];
+          latlngs.push(latlng);
+
+          // Μικρό marker για κάθε waypoint
+          L.circleMarker(latlng, {
+            radius: 3
+          }).addTo(surveyLayer);
+        });
+
+        // Προαιρετικά: polyline που ενώνει τα waypoints
+        L.polyline(latlngs, { dashArray: "4 4" }).addTo(surveyLayer);
+
+        // Zoom ώστε να φαίνονται
+        map.fitBounds(L.latLngBounds(latlngs));
+      }
+
+      alert("Received " + data.waypoints.length + " waypoints from backend!");
+    }
+  </script>
+</body>
+</html>
