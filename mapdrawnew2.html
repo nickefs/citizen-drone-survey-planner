@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Survey Planner (Esri Satellite + Alt 10m)</title>
+  <title>Survey Planner (Esri Satellite)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
@@ -63,16 +63,17 @@
 
   <script>
     const DEFAULT_ALT = 10;
-
+    let lastWaypoints = [];
     // Map
-    const map = L.map('map').setView([39.101418, 26.440039], 17);
+    const map = L.map('map', { maxZoom: 22 }).setView([39.101418, 26.440039], 17);
 
     // Basemaps
     const esriSat = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       {
         minZoom: 3,
-        maxZoom: 19,
+        maxNativeZoom: 18,
+        maxZoom: 22,
         attribution: 'Imagery © <a href="https://www.esri.com/">Esri</a>'
       }
     ).addTo(map);
@@ -81,7 +82,8 @@
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       {
         minZoom: 3,
-        maxZoom: 19,
+        maxNativeZoom: 18,
+        maxZoom: 22,
         attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
       }
     );
@@ -187,44 +189,50 @@
       return found;
     }
 
-    function exportCSV() {
-      if (!hasAnyPolygon()) {
-        alert("Export is only available after you finish drawing at least one polygon.");
-        return;
-      }
+function exportCSV() {
+  if (!lastWaypoints.length) {
+    alert("No waypoints received from the server yet. Please press 'Generate Survey (Server)' first.");
+    return;
+  }
 
-      let rows = ['lat,lon,type,alt_m'];
-      drawnItems.eachLayer(layer => {
-        const props = (layer.feature && layer.feature.properties) || {};
-        const typ = props.type || guessType(layer);
-        const alt = (typeof props.alt_m === 'number') ? props.alt_m : DEFAULT_ALT;
+  let rows = ['lat,lon,alt_m'];
 
-        if (layer instanceof L.Marker) {
-          const c = layer.getLatLng();
-          rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},${typ},${alt}`);
-        } else if (layer instanceof L.Polygon) {
-          const latlngs = (layer.getLatLngs()[0] || []);
-          latlngs.forEach((c, i) =>
-            rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},PolygonVertex#${i+1},${alt}`)
-          );
-        } else if (layer instanceof L.Polyline) {
-          const latlngs = layer.getLatLngs();
-          latlngs.forEach((c, i) =>
-            rows.push(`${c.lat.toFixed(7)},${c.lng.toFixed(7)},LineVertex#${i+1},${alt}`)
-          );
-        }
-      });
-      download('waypoints.csv', rows.join('\n'));
-    }
+  lastWaypoints.forEach((wp) => {
+    const lat = Number(wp.lat);
+    const lon = Number(wp.lon);
+    const alt = (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT;
+
+    rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt}`);
+  });
+
+  download('survey_waypoints.csv', rows.join('\n'));
+}
 
     function exportGeoJSON() {
-      if (!hasAnyPolygon()) {
-        alert("Export is only available after you finish drawing at least one polygon.");
-        return;
-      }
-      const fc = toGeoJSONCollection();
-      download('features.geojson', JSON.stringify(fc, null, 2));
+  if (!lastWaypoints.length) {
+    alert("No waypoints received from the server yet. Please press 'Generate Survey (Server)' first.");
+    return;
+  }
+
+  const features = lastWaypoints.map((wp, idx) => ({
+    type: "Feature",
+    properties: {
+      index: idx,
+      alt_m: (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT
+    },
+    geometry: {
+      type: "Point",
+      coordinates: [Number(wp.lon), Number(wp.lat)]  // GeoJSON: [lon, lat]
     }
+  }));
+
+  const fc = {
+    type: "FeatureCollection",
+    features
+  };
+
+  download('survey_waypoints.geojson', JSON.stringify(fc, null, 2));
+}
 
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJSON);
@@ -276,7 +284,7 @@
       const data = await res.json();
 
       console.log("Waypoints from server:", data.waypoints);
-
+      lastWaypoints = Array.isArray(data.waypoints) ? data.waypoints : [];   
       // Καθαρίζουμε τα παλιά survey waypoints
       surveyLayer.clearLayers();
 
