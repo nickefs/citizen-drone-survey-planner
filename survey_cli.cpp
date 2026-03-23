@@ -46,23 +46,22 @@ int main() {
     CameraSpec cam{};
     cam.frontOverlapPct = 25;
     cam.sideOverlapPct  = 25;
-    cam.sensorWidth_mm  = 6.45;
-    cam.sensorHeight_mm = 3.63;
-    cam.focalLength_mm  = 4.7;
-    cam.imageWidth_px   = 2304;
-    cam.imageHeight_px  = 1296;
+    cam.sensorWidth_mm  = 3.68;
+    cam.sensorHeight_mm = 2.76;
+    cam.focalLength_mm  = 3.04;
+    cam.imageWidth_px   = 3280;
+    cam.imageHeight_px  = 2474;
 
     // 3) SurveyParams (ίδιοι με main.cpp για αρχή)
     SurveyParams params{};
-    params.altitudeAGL_m      = 10;      // μπορείς αργότερα να το περάσεις από stdin
-    params.gridAngle_deg      = 0.0;
+    params.altitudeAGL_m      = 6;      // μπορείς αργότερα να το περάσεις από stdin
+    params.gridAngle_deg      = 90.0;
     params.gridSpacing_m      = -1.0;    // auto από camera/overlap
     params.triggerDist_m      = -1.0;    // auto από camera/overlap
-    params.turnaround_m       = 10.0;
+    params.turnaround_m       = 1.0;
     params.alternateTransects = false;
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;
-
     // 4) ΚΑΛΕΣΕ generateSurvey
     std::vector<Waypoint> wps = generateSurvey(polygon, cam, params);
 
