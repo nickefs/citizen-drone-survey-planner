@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <iomanip>
+#include <cstdlib>
 
 #include "nqt_survey.hpp"  // δηλώνει: nqt::Geo, CameraSpec, SurveyParams, Waypoint, WaypointType, generateSurvey
 
@@ -21,7 +22,10 @@ static const char* toString(WaypointType t) {
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    const double altFromArg = (argc > 1) ? std::atof(argv[1]) : 0.0;
+    const double altitudeAGL_m = (altFromArg > 0.0) ? altFromArg : 10.0;
+
     // 1) ΔΙΑΒΑΣΜΑ ΠΟΛΥΓΩΝΟΥ ΑΠΟ stdin
     // Περιμένουμε γραμμές: lat lon
     std::vector<Geo> polygon;
@@ -54,7 +58,7 @@ int main() {
 
     // 3) SurveyParams (ίδιοι με main.cpp για αρχή)
     SurveyParams params{};
-    params.altitudeAGL_m      = 6;      // μπορείς αργότερα να το περάσεις από stdin
+    params.altitudeAGL_m      = altitudeAGL_m;
     params.gridAngle_deg      = 90.0;
     params.gridSpacing_m      = -1.0;    // auto από camera/overlap
     params.triggerDist_m      = -1.0;    // auto από camera/overlap
@@ -62,6 +66,7 @@ int main() {
     params.alternateTransects = false;
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;
+
     // 4) ΚΑΛΕΣΕ generateSurvey
     std::vector<Waypoint> wps = generateSurvey(polygon, cam, params);
 
