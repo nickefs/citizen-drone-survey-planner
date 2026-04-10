@@ -234,7 +234,11 @@
         return;
       }
 
-      const payload = { polygon };
+      const altitude = Number(document.getElementById('altInput').value);
+      const payload = {
+        polygon,
+        altitude_m: Number.isFinite(altitude) && altitude > 0 ? altitude : DEFAULT_ALT
+      };
 
       const res = await fetch("/api/survey", {
         method: "POST",
