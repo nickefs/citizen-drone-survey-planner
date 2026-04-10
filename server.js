@@ -32,6 +32,8 @@ app.post("/echo", (req, res) => {
 // ΚΥΡΙΟ ROUTE: /api/survey που καλεί το C++ survey_cli.exe
 app.post("/api/survey", (req, res) => {
   const polygon = req.body.polygon;
+  const altitude = Number(req.body.altitude_m);
+  const altitudeAGL_m = Number.isFinite(altitude) && altitude > 0 ? altitude : 10.0;
 
   // 1) απλοί έλεγχοι
   if (!Array.isArray(polygon) || polygon.length < 3) {
@@ -43,7 +45,7 @@ app.post("/api/survey", (req, res) => {
   const binName = process.platform === "win32" ? "survey_cli.exe" : "survey_cli";
   const binPath = path.join(__dirname, binName);
 
-  const child = spawn(binPath);
+  const child = spawn(binPath, [String(altitudeAGL_m)]);
 
   let output = "";
   let errorOutput = "";
