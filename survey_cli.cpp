@@ -80,6 +80,7 @@ int main(int argc, char* argv[]) {
             << "{"
             << "\"lat\":"  << w.coord.lat << ","
             << "\"lon\":"  << w.coord.lon << ","
+            << "\"alt_m\":" << w.coord.alt << ","
             << "\"type\":\"" << toString(w.type) << "\""
             << "}";
         if (i + 1 < wps.size()) {
