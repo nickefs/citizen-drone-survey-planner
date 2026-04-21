@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Survey Planner (Esri Satellite)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+  <style>
+    html, body { height:100%; margin:0; }
+    .leaflet-top.leaflet-left { margin-top: 60px; }
+
+    /* ---------- SMALLER TOPBAR ---------- */
+    #topbar {
+      position: fixed;
+      z-index: 1000;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.95);
+      padding: 4px 8px;          /* μικρότερο */
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      font-family: system-ui, sans-serif;
+      display:flex;
+      gap:6px;
+      align-items:center;
+      transform: scale(0.90);    /* μικραίνει όλη τη μπάρα */
+      transform-origin: top left;
+    }
+
+    #map { height: 100%; }
+
+    button {
+      padding:6px 10px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      background:#f6f6f6;
+      cursor:pointer;
+    }
+
+    button:hover { background:#eee; }
+
+    input[type="number"] {
+      width: 90px;
+      padding:4px 6px;
+    }
+
+    .pill { font-size:12px; color:#555; }
+
+    /* ---------- ROUND FLOATING BUTTON ---------- */
+    #floatingSurveyBtn {
+      position: fixed;
+      top: 330px;   /* φαίνεται κάτω από το delete tool */
+      left: 7px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: #0084ff;
+      color: white;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      z-index: 1200;
+    }
+
+    #floatingSurveyBtn:hover {
+      background: #006fe0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Topbar (smaller now) -->
+  <div id="topbar">
+    <span class="pill">Default Alt (m):</span>
+    <input id="altInput" type="number" value="6" step="1" />
+
+    <button id="exportCsvBtn">Export CSV</button>
+    <button id="exportGeoJsonBtn">Export GeoJSON</button>
+
+    <!-- Generate Survey REMOVED from here -->
+  </div>
+
+  <!-- ROUND FLOATING BUTTON -->
+  <button id="floatingSurveyBtn" onclick="sendPolygonToServer()">▶</button>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+  <script>
+    const DEFAULT_ALT = 6;
+    let lastWaypoints = [];
+
+    // Map
+    const map = L.map('map', { maxZoom: 22 }).setView([39.101418, 26.440039], 17);
+
+    // Basemap (Satellite only)
+    const esriSat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        minZoom: 3,
+        maxNativeZoom: 18,
+        maxZoom: 22,
+        attribution: 'Imagery © <a href="https://www.esri.com/">Esri</a>'
+      }
+    ).addTo(map);
+
+    // Draw layers
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const surveyLayer = new L.FeatureGroup();
+    map.addLayer(surveyLayer);
+
+    const drawControl = new L.Control.Draw({
+      position: 'topleft',
+      draw: { rectangle:false, circle:false, circlemarker:false },
+      edit: { featureGroup: drawnItems, remove: true }
+    });
+    map.addControl(drawControl);
+
+    // Events
+    map.on(L.Draw.Event.CREATED, e => {
+      const layer = e.layer;
+      layer.feature = layer.feature || { type:'Feature', properties:{} };
+      layer.feature.properties.type = guessType(layer);
+      layer.feature.properties.alt_m = DEFAULT_ALT;
+      drawnItems.addLayer(layer);
+      surveyLayer.clearLayers();
+    });
+
+    map.on(L.Draw.Event.EDITED, e => {
+      e.layers.eachLayer(layer => {
+        layer.feature = layer.feature || { type:'Feature', properties:{} };
+        if (!layer.feature.properties.type)
+          layer.feature.properties.type = guessType(layer);
+        if (typeof layer.feature.properties.alt_m !== 'number')
+          layer.feature.properties.alt_m = DEFAULT_ALT;
+      });
+      surveyLayer.clearLayers();
+    });
+
+    map.on(L.Draw.Event.DELETED, () => {
+      surveyLayer.clearLayers();
+    });
+
+    function guessType(layer) {
+      if (layer instanceof L.Marker) return 'Point';
+      if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) return 'LineString';
+      if (layer instanceof L.Polygon) return 'Polygon';
+      return 'Unknown';
+    }
+
+    // Export helpers
+    function download(filename, text) {
+      const blob = new Blob([text], { type:'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function exportCSV() {
+      if (!lastWaypoints.length) {
+        alert("No waypoints received yet. Press the blue ▶ button.");
+        return;
+      }
+
+      let rows = ['lat,lon,alt_m,type'];
+
+      lastWaypoints.forEach((wp) => {
+        const lat = Number(wp.lat);
+        const lon = Number(wp.lon);
+        const alt = (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT;
+        const type = (wp.type != null) ? String(wp.type) : '';
+        rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt},${type}`);
+      });
+
+      download('survey_waypoints.csv', rows.join('\n'));
+    }
+
+    function exportGeoJSON() {
+      if (!lastWaypoints.length) {
+        alert("No waypoints received yet. Press the blue ▶ button.");
+        return;
+      }
+
+      const features = lastWaypoints.map((wp, idx) => ({
+        type: "Feature",
+        properties: {
+          index: idx,
+          alt_m: (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [Number(wp.lon), Number(wp.lat)]
+        }
+      }));
+
+      const fc = { type:"FeatureCollection", features };
+      download('survey_waypoints.geojson', JSON.stringify(fc, null, 2));
+    }
+
+    document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
+    document.getElementById('exportGeoJsonBtn').addEventListener('click', exportGeoJSON);
+
+    function getMainPolygonLatLngs() {
+      let polygonLayer = null;
+
+      drawnItems.eachLayer(layer => {
+        if (layer instanceof L.Polygon && !polygonLayer) polygonLayer = layer;
+      });
+
+      if (!polygonLayer) return null;
+
+      const rings = polygonLayer.getLatLngs();
+      const outer = Array.isArray(rings) ? rings[0] : rings;
+      if (!outer || outer.length < 3) return null;
+
+      return outer.map(p => ({ lat: p.lat, lon: p.lng }));
+    }
+
+    async function sendPolygonToServer() {
+      const polygon = getMainPolygonLatLngs();
+      if (!polygon) {
+        alert("Draw a polygon first!");
+        return;
+      }
+
+      const altitude = Number(document.getElementById('altInput').value);
+      const payload = {
+        polygon,
+        altitude_m: Number.isFinite(altitude) && altitude > 0 ? altitude : DEFAULT_ALT
+      };
+
+      const res = await fetch("/api/survey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      lastWaypoints = Array.isArray(data.waypoints) ? data.waypoints : [];
+
+      surveyLayer.clearLayers();
+
+      if (Array.isArray(data.waypoints) && data.waypoints.length > 0) {
+        const latlngs = [];
+
+        data.waypoints.forEach((wp) => {
+          const latlng = [wp.lat, wp.lon];
+          latlngs.push(latlng);
+
+          L.circleMarker(latlng, { radius: 3 }).addTo(surveyLayer);
+        });
+
+        L.polyline(latlngs, { dashArray:"4 4" }).addTo(surveyLayer);
+        map.fitBounds(L.latLngBounds(latlngs));
+      }
+
+      alert("Received " + data.waypoints.length + " waypoints!");
+    }
+  </script>
+
+</body>
+</html>
