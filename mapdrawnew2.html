@@ -174,13 +174,14 @@
         return;
       }
 
-      let rows = ['lat,lon,alt_m'];
+      let rows = ['lat,lon,alt_m,type'];
 
       lastWaypoints.forEach((wp) => {
         const lat = Number(wp.lat);
         const lon = Number(wp.lon);
         const alt = (wp.alt_m != null) ? Number(wp.alt_m) : DEFAULT_ALT;
-        rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt}`);
+        const type = (wp.type != null) ? String(wp.type) : '';
+        rows.push(`${lat.toFixed(7)},${lon.toFixed(7)},${alt},${type}`);
       });
 
       download('survey_waypoints.csv', rows.join('\n'));
