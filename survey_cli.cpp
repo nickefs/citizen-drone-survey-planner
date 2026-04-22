@@ -79,46 +79,6 @@ int main(int argc, char* argv[]) {
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;
 
-    // Auto grid angle: align transects with polygon major axis (PCA) to reduce total flight distance.
-    // In generateSurvey(), base transect direction is +North; rotating by gridAngle_deg rotates transects.
-    // So we choose gridAngle such that transect direction follows the polygon's long axis.
-    if (polygon.size() >= 3) {
-        const Geo origin = polygon.front();
-
-        // Convert polygon vertices to local NED plane (x=East, y=North)
-        std::vector<nqt::Pt> pts;
-        pts.reserve(polygon.size());
-        for (size_t i = 0; i < polygon.size(); ++i) {
-            const nqt::Pt p = (i == 0) ? nqt::Pt{0, 0} : nqt::convertGeoToNed(polygon[i], origin);
-            pts.push_back(p);
-        }
-
-        // Mean
-        double mx = 0.0, my = 0.0;
-        for (const auto& p : pts) { mx += p.x; my += p.y; }
-        mx /= static_cast<double>(pts.size());
-        my /= static_cast<double>(pts.size());
-
-        // Covariance (2x2)
-        double sxx = 0.0, sxy = 0.0, syy = 0.0;
-        for (const auto& p : pts) {
-            const double dx = p.x - mx;
-            const double dy = p.y - my;
-            sxx += dx * dx;
-            sxy += dx * dy;
-            syy += dy * dy;
-        }
-
-        // Principal axis angle θ (radians) of the largest eigenvector:
-        // θ = 0.5 * atan2(2*sxy, sxx - syy)
-        const double theta = 0.5 * std::atan2(2.0 * sxy, (sxx - syy));
-        const double majorAxisDeg = nqt::rad2deg(theta); // angle from +East toward +North
-
-        // Transect direction angle = 90deg + gridAngle_deg (since base is +North).
-        // Set gridAngle so that transect direction aligns to major axis.
-        params.gridAngle_deg = nqt::clampGridAngle90(majorAxisDeg - 90.0);
-    }
-
     // Αν υπάρχει Home, διάλεξε entryCorner ως το bbox corner του polygon (σε local NED)
     // που είναι πιο κοντά στο Home.
     if (hasHome && polygon.size() >= 3) {
@@ -159,8 +119,47 @@ int main(int argc, char* argv[]) {
         if (dbl < best) { /*best = dbl;*/ params.entryCorner = EntryCorner::BottomLeft; }
     }
 
-    // 4) ΚΑΛΕΣΕ generateSurvey
-    std::vector<Waypoint> wps = generateSurvey(polygon, cam, params);
+    // 4) Δοκίμασε διαφορετικές γωνίες και κράτα αυτή με το μικρότερο "cost"
+    // cost = συνολικό μήκος διαδρομής + penalty για στροφές (approximated)
+    constexpr double kTurnPenalty_m = 25.0;
+    auto score = [&](const std::vector<Waypoint>& wps) -> double {
+        if (wps.size() < 2) return std::numeric_limits<double>::infinity();
+        double total = 0.0;
+        for (size_t i = 1; i < wps.size(); ++i) {
+            total += nqt::distance(wps[i - 1].coord, wps[i].coord);
+        }
+        size_t entries = 0;
+        for (const auto& w : wps) if (w.type == WaypointType::SurveyEntry) ++entries;
+        const size_t turns = (entries > 0) ? (entries - 1) : 0;
+        total += static_cast<double>(turns) * kTurnPenalty_m;
+        return total;
+    };
+
+    auto evalAngle = [&](double angDeg) -> std::pair<double, std::vector<Waypoint>> {
+        SurveyParams p = params;
+        p.gridAngle_deg = angDeg;
+        auto w = generateSurvey(polygon, cam, p);
+        const double s = score(w);
+        return {s, std::move(w)};
+    };
+
+    // coarse sweep
+    double bestAngle = params.gridAngle_deg;
+    double bestScore = std::numeric_limits<double>::infinity();
+    std::vector<Waypoint> bestWps;
+
+    for (double ang = -90.0; ang <= 90.0; ang += 5.0) {
+        auto [s, w] = evalAngle(ang);
+        if (s < bestScore) { bestScore = s; bestAngle = ang; bestWps = std::move(w); }
+    }
+
+    // refine sweep around best coarse angle
+    for (double ang = bestAngle - 5.0; ang <= bestAngle + 5.0; ang += 1.0) {
+        auto [s, w] = evalAngle(ang);
+        if (s < bestScore) { bestScore = s; bestAngle = ang; bestWps = std::move(w); }
+    }
+
+    std::vector<Waypoint> wps = std::move(bestWps);
 
     // 5) ΤΥΠΩΣΕ JSON ΣΤΟ stdout
     std::cout << std::fixed << std::setprecision(8);
