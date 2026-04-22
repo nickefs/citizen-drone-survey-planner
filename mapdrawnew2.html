@@ -40,6 +40,7 @@
     }
 
     button:hover { background:#eee; }
+    button.active { background:#ffe08a; border-color:#d6b35f; }
 
     input[type="number"] {
       width: 90px;
@@ -79,6 +80,9 @@
     <span class="pill">Default Alt (m):</span>
     <input id="altInput" type="number" value="6" step="1" />
 
+    <button id="setHomeBtn" title="Click then click on map">Set Home</button>
+    <button id="clearHomeBtn" title="Remove Home marker">Clear Home</button>
+
     <button id="exportCsvBtn">Export CSV</button>
     <button id="exportGeoJsonBtn">Export GeoJSON</button>
 
@@ -96,6 +100,9 @@
   <script>
     const DEFAULT_ALT = 6;
     let lastWaypoints = [];
+    let homeLatLng = null;
+    let homeMarker = null;
+    let pickHomeMode = false;
 
     // Map
     const map = L.map('map', { maxZoom: 22 }).setView([39.101418, 26.440039], 17);
@@ -110,6 +117,44 @@
         attribution: 'Imagery © <a href="https://www.esri.com/">Esri</a>'
       }
     ).addTo(map);
+
+    function setHome(latlng) {
+      homeLatLng = latlng;
+      if (homeMarker) map.removeLayer(homeMarker);
+      homeMarker = L.marker(latlng, { draggable: true }).addTo(map);
+      homeMarker.bindPopup("Home").openPopup();
+      homeMarker.on("dragend", () => {
+        homeLatLng = homeMarker.getLatLng();
+      });
+    }
+
+    const setHomeBtn = document.getElementById("setHomeBtn");
+    const clearHomeBtn = document.getElementById("clearHomeBtn");
+
+    setHomeBtn.addEventListener("click", () => {
+      pickHomeMode = !pickHomeMode;
+      setHomeBtn.classList.toggle("active", pickHomeMode);
+      setHomeBtn.textContent = pickHomeMode ? "Click map…" : "Set Home";
+    });
+
+    clearHomeBtn.addEventListener("click", () => {
+      pickHomeMode = false;
+      setHomeBtn.classList.remove("active");
+      setHomeBtn.textContent = "Set Home";
+      homeLatLng = null;
+      if (homeMarker) {
+        map.removeLayer(homeMarker);
+        homeMarker = null;
+      }
+    });
+
+    map.on("click", (e) => {
+      if (!pickHomeMode) return;
+      setHome(e.latlng);
+      pickHomeMode = false;
+      setHomeBtn.classList.remove("active");
+      setHomeBtn.textContent = "Set Home";
+    });
 
     // Draw layers
     const drawnItems = new L.FeatureGroup();
@@ -240,6 +285,10 @@
         polygon,
         altitude_m: Number.isFinite(altitude) && altitude > 0 ? altitude : DEFAULT_ALT
       };
+
+      if (homeLatLng) {
+        payload.home = { lat: homeLatLng.lat, lon: homeLatLng.lng };
+      }
 
       const res = await fetch("/api/survey", {
         method: "POST",

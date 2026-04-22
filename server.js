@@ -34,10 +34,22 @@ app.post("/api/survey", (req, res) => {
   const polygon = req.body.polygon;
   const altitude = Number(req.body.altitude_m);
   const altitudeAGL_m = Number.isFinite(altitude) && altitude > 0 ? altitude : 10.0;
+  const home = req.body.home;
 
   // 1) απλοί έλεγχοι
   if (!Array.isArray(polygon) || polygon.length < 3) {
     return res.status(400).json({ error: "Invalid polygon" });
+  }
+
+  let homeLat = null;
+  let homeLon = null;
+  if (home && typeof home === "object") {
+    const lat = Number(home.lat);
+    const lon = Number(home.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      homeLat = lat;
+      homeLon = lon;
+    }
   }
 
   // 2) ξεκινάμε το C++ πρόγραμμα
@@ -45,7 +57,12 @@ app.post("/api/survey", (req, res) => {
   const binName = process.platform === "win32" ? "survey_cli.exe" : "survey_cli";
   const binPath = path.join(__dirname, binName);
 
-  const child = spawn(binPath, [String(altitudeAGL_m)]);
+  const args = [String(altitudeAGL_m)];
+  if (homeLat != null && homeLon != null) {
+    args.push(String(homeLat), String(homeLon));
+  }
+
+  const child = spawn(binPath, args);
 
   let output = "";
   let errorOutput = "";
