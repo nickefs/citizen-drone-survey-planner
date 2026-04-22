@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <limits>
 #include <algorithm>
+#include <cmath>
 
 #include "nqt_survey.hpp"  // δηλώνει: nqt::Geo, CameraSpec, SurveyParams, Waypoint, WaypointType, generateSurvey
 
@@ -70,13 +71,53 @@ int main(int argc, char* argv[]) {
     // 3) SurveyParams (ίδιοι με main.cpp για αρχή)
     SurveyParams params{};
     params.altitudeAGL_m      = altitudeAGL_m;
-    params.gridAngle_deg      = 90.0;
+    params.gridAngle_deg      = 90.0; // will be auto-updated from polygon below
     params.gridSpacing_m      = -1.0;    // auto από camera/overlap
     params.triggerDist_m      = -1.0;    // auto από camera/overlap
     params.turnaround_m       = 0.0;
     params.alternateTransects = false;
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;
+
+    // Auto grid angle: align transects with polygon major axis (PCA) to reduce total flight distance.
+    // In generateSurvey(), base transect direction is +North; rotating by gridAngle_deg rotates transects.
+    // So we choose gridAngle such that transect direction follows the polygon's long axis.
+    if (polygon.size() >= 3) {
+        const Geo origin = polygon.front();
+
+        // Convert polygon vertices to local NED plane (x=East, y=North)
+        std::vector<nqt::Pt> pts;
+        pts.reserve(polygon.size());
+        for (size_t i = 0; i < polygon.size(); ++i) {
+            const nqt::Pt p = (i == 0) ? nqt::Pt{0, 0} : nqt::convertGeoToNed(polygon[i], origin);
+            pts.push_back(p);
+        }
+
+        // Mean
+        double mx = 0.0, my = 0.0;
+        for (const auto& p : pts) { mx += p.x; my += p.y; }
+        mx /= static_cast<double>(pts.size());
+        my /= static_cast<double>(pts.size());
+
+        // Covariance (2x2)
+        double sxx = 0.0, sxy = 0.0, syy = 0.0;
+        for (const auto& p : pts) {
+            const double dx = p.x - mx;
+            const double dy = p.y - my;
+            sxx += dx * dx;
+            sxy += dx * dy;
+            syy += dy * dy;
+        }
+
+        // Principal axis angle θ (radians) of the largest eigenvector:
+        // θ = 0.5 * atan2(2*sxy, sxx - syy)
+        const double theta = 0.5 * std::atan2(2.0 * sxy, (sxx - syy));
+        const double majorAxisDeg = nqt::rad2deg(theta); // angle from +East toward +North
+
+        // Transect direction angle = 90deg + gridAngle_deg (since base is +North).
+        // Set gridAngle so that transect direction aligns to major axis.
+        params.gridAngle_deg = nqt::clampGridAngle90(majorAxisDeg - 90.0);
+    }
 
     // Αν υπάρχει Home, διάλεξε entryCorner ως το bbox corner του polygon (σε local NED)
     // που είναι πιο κοντά στο Home.
