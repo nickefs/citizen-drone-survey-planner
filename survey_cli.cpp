@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
     params.gridAngle_deg      = 90.0; // will be auto-updated from polygon below
     params.gridSpacing_m      = -1.0;    // auto από camera/overlap
     params.triggerDist_m      = -1.0;    // auto από camera/overlap
-    params.turnaround_m       = 0.0;
+    params.turnaround_m       = 3;
     params.alternateTransects = false;
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;
