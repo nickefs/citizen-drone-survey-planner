@@ -1,6 +1,9 @@
 # UAV Survey Waypoint Generator
 
 A web-based tool for planning UAV mapping surveys. The user draws a survey polygon on an interactive satellite map, optionally selects a home position, and the application generates an optimized sequence of survey waypoints.
+## Preview
+
+![UAV Survey Waypoint Generator](docs/screenshots/survey-example.png)
 
 ## Features
 
