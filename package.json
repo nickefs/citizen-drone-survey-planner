@@ -1,14 +1,20 @@
 {
-  "name": "survey_backend",
+  "name": "uav-survey-waypoint-generator",
   "version": "1.0.0",
-  "description": "",
+  "description": "Web-based UAV survey waypoint generator using Leaflet, Node.js and a C++ survey engine.",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "uav",
+    "drone",
+    "survey",
+    "waypoints",
+    "mapping",
+    "leaflet",
+    "cpp"
+  ],
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
