@@ -1,0 +1,10 @@
+.git
+.gitignore
+node_modules
+survey_cli
+survey_cli.exe
+build
+.env
+*.log
+.DS_Store
+Thumbs.db
