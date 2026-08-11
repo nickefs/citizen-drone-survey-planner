@@ -24,6 +24,31 @@ app.post("/api/survey", (req, res) => {
   const altitude = Number(req.body.altitude_m);
   const altitudeAGL_m =
     Number.isFinite(altitude) && altitude > 0 ? altitude : 10.0;
+  const camera = req.body.camera && typeof req.body.camera === "object"
+    ? req.body.camera
+    : {};
+  const readPositive = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  const readOverlap = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 && n <= 95 ? n : fallback;
+  };
+  const readRange = (value, fallback, min, max) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+  };
+  const surveyOptions = {
+    sensorWidthMm: readPositive(camera.sensor_width_mm, 3.68),
+    sensorHeightMm: readPositive(camera.sensor_height_mm, 2.76),
+    focalLengthMm: readPositive(camera.focal_length_mm, 3.04),
+    imageWidthPx: Math.round(readPositive(camera.image_width_px, 3280)),
+    imageHeightPx: Math.round(readPositive(camera.image_height_px, 2474)),
+    frontOverlapPct: readOverlap(camera.front_overlap_pct, 25),
+    sideOverlapPct: readOverlap(camera.side_overlap_pct, 25),
+    turnaroundM: readRange(req.body.turnaround_m, 3, 0, 100),
+  };
   const home = req.body.home;
 
   if (!Array.isArray(polygon) || polygon.length < 3) {
@@ -46,10 +71,20 @@ app.post("/api/survey", (req, res) => {
   const binName = process.platform === "win32" ? "survey_cli.exe" : "survey_cli";
   const binPath = path.join(__dirname, binName);
 
-  const args = [String(altitudeAGL_m)];
+  const args = [
+    String(altitudeAGL_m),
+    "--sensor-width", String(surveyOptions.sensorWidthMm),
+    "--sensor-height", String(surveyOptions.sensorHeightMm),
+    "--focal-length", String(surveyOptions.focalLengthMm),
+    "--image-width", String(surveyOptions.imageWidthPx),
+    "--image-height", String(surveyOptions.imageHeightPx),
+    "--front-overlap", String(surveyOptions.frontOverlapPct),
+    "--side-overlap", String(surveyOptions.sideOverlapPct),
+    "--turnaround", String(surveyOptions.turnaroundM),
+  ];
 
   if (homeLat != null && homeLon != null) {
-    args.push(String(homeLat), String(homeLon));
+    args.push("--home", String(homeLat), String(homeLon));
   }
 
   const child = spawn(binPath, args);

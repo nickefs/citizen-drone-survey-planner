@@ -15,6 +15,34 @@
 using nqt::Geo;
 using nqt::distance;
 
+namespace {
+constexpr double kDefaultAltitude_m = 10.0;
+constexpr double kDefaultFrontOverlapPct = 25.0;
+constexpr double kDefaultSideOverlapPct = 25.0;
+constexpr double kDefaultSensorWidth_mm = 3.68;
+constexpr double kDefaultSensorHeight_mm = 2.76;
+constexpr double kDefaultFocalLength_mm = 3.04;
+constexpr int kDefaultImageWidth_px = 3280;
+constexpr int kDefaultImageHeight_px = 2474;
+constexpr double kDefaultTurnaround_m = 3.0;
+
+bool readDoubleArg(int argc, char* argv[], int& i, double& out) {
+    if (i + 1 >= argc) return false;
+    out = std::atof(argv[++i]);
+    return true;
+}
+
+bool readIntArg(int argc, char* argv[], int& i, int& out) {
+    if (i + 1 >= argc) return false;
+    out = std::atoi(argv[++i]);
+    return true;
+}
+
+bool isFlag(const char* value) {
+    return value && value[0] == '-';
+}
+}
+
 // Helper: waypoint type -> string
 static const char* toString(WaypointType t) {
     switch (t) {
@@ -28,15 +56,64 @@ static const char* toString(WaypointType t) {
 
 int main(int argc, char* argv[]) {
     const double altFromArg = (argc > 1) ? std::atof(argv[1]) : 0.0;
-    const double altitudeAGL_m = (altFromArg > 0.0) ? altFromArg : 10.0;
+    const double altitudeAGL_m = (altFromArg > 0.0) ? altFromArg : kDefaultAltitude_m;
 
-    const bool hasHome = (argc >= 4);
+    CameraSpec cam{};
+    cam.frontOverlapPct = kDefaultFrontOverlapPct;
+    cam.sideOverlapPct  = kDefaultSideOverlapPct;
+    cam.sensorWidth_mm  = kDefaultSensorWidth_mm;
+    cam.sensorHeight_mm = kDefaultSensorHeight_mm;
+    cam.focalLength_mm  = kDefaultFocalLength_mm;
+    cam.imageWidth_px   = kDefaultImageWidth_px;
+    cam.imageHeight_px  = kDefaultImageHeight_px;
+
+    double turnaround_m = kDefaultTurnaround_m;
+    bool hasHome = false;
     Geo home{};
-    if (hasHome) {
+    int argi = 2;
+
+    if (argc >= 4 && !isFlag(argv[2])) {
+        hasHome = true;
         home.lat = std::atof(argv[2]);
         home.lon = std::atof(argv[3]);
         home.alt = 0.0;
+        argi = 4;
     }
+
+    for (int i = argi; i < argc; ++i) {
+        const std::string flag = argv[i];
+        if (flag == "--home" && i + 2 < argc) {
+            hasHome = true;
+            home.lat = std::atof(argv[++i]);
+            home.lon = std::atof(argv[++i]);
+            home.alt = 0.0;
+        } else if (flag == "--sensor-width") {
+            readDoubleArg(argc, argv, i, cam.sensorWidth_mm);
+        } else if (flag == "--sensor-height") {
+            readDoubleArg(argc, argv, i, cam.sensorHeight_mm);
+        } else if (flag == "--focal-length") {
+            readDoubleArg(argc, argv, i, cam.focalLength_mm);
+        } else if (flag == "--image-width") {
+            readIntArg(argc, argv, i, cam.imageWidth_px);
+        } else if (flag == "--image-height") {
+            readIntArg(argc, argv, i, cam.imageHeight_px);
+        } else if (flag == "--front-overlap") {
+            readDoubleArg(argc, argv, i, cam.frontOverlapPct);
+        } else if (flag == "--side-overlap") {
+            readDoubleArg(argc, argv, i, cam.sideOverlapPct);
+        } else if (flag == "--turnaround") {
+            readDoubleArg(argc, argv, i, turnaround_m);
+        }
+    }
+
+    if (cam.sensorWidth_mm <= 0) cam.sensorWidth_mm = kDefaultSensorWidth_mm;
+    if (cam.sensorHeight_mm <= 0) cam.sensorHeight_mm = kDefaultSensorHeight_mm;
+    if (cam.focalLength_mm <= 0) cam.focalLength_mm = kDefaultFocalLength_mm;
+    if (cam.imageWidth_px <= 0) cam.imageWidth_px = kDefaultImageWidth_px;
+    if (cam.imageHeight_px <= 0) cam.imageHeight_px = kDefaultImageHeight_px;
+    if (cam.frontOverlapPct < 0 || cam.frontOverlapPct > 95) cam.frontOverlapPct = kDefaultFrontOverlapPct;
+    if (cam.sideOverlapPct < 0 || cam.sideOverlapPct > 95) cam.sideOverlapPct = kDefaultSideOverlapPct;
+    if (turnaround_m < 0) turnaround_m = kDefaultTurnaround_m;
 
     // 1) ΔΙΑΒΑΣΜΑ ΠΟΛΥΓΩΝΟΥ ΑΠΟ stdin
     // Περιμένουμε γραμμές: lat lon
@@ -59,22 +136,13 @@ int main(int argc, char* argv[]) {
     }
 
     // 2) CameraSpec (ίδια με το demo στο main.cpp)
-    CameraSpec cam{};
-    cam.frontOverlapPct = 25;
-    cam.sideOverlapPct  = 25;
-    cam.sensorWidth_mm  = 3.68;
-    cam.sensorHeight_mm = 2.76;
-    cam.focalLength_mm  = 3.04;
-    cam.imageWidth_px   = 3280;
-    cam.imageHeight_px  = 2474;
-
     // 3) SurveyParams (ίδιοι με main.cpp για αρχή)
     SurveyParams params{};
     params.altitudeAGL_m      = altitudeAGL_m;
     params.gridAngle_deg      = 90.0; // will be auto-updated from polygon below
     params.gridSpacing_m      = -1.0;    // auto από camera/overlap
     params.triggerDist_m      = -1.0;    // auto από camera/overlap
-    params.turnaround_m       = 3;
+    params.turnaround_m       = turnaround_m;
     params.alternateTransects = false;
     params.refly90            = false;
     params.entryCorner        = EntryCorner::TopLeft;

@@ -43,11 +43,82 @@
     button.active { background:#ffe08a; border-color:#d6b35f; }
 
     input[type="number"] {
-      width: 90px;
+      width: 74px;
       padding:4px 6px;
     }
 
     .pill { font-size:12px; color:#555; }
+    .divider { width:1px; height:24px; background:#ddd; margin:0 2px; }
+
+    #settingsPanel {
+      position: fixed;
+      z-index: 1300;
+      top: 58px;
+      left: 10px;
+      width: min(360px, calc(100vw - 20px));
+      background: rgba(255,255,255,0.98);
+      border: 1px solid #d8d8d8;
+      border-radius: 6px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.22);
+      font-family: system-ui, sans-serif;
+      padding: 12px;
+      display: none;
+    }
+
+    #settingsPanel.open { display: block; }
+
+    .settingsHeader {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom: 10px;
+    }
+
+    .settingsTitle {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .settingsGrid {
+      display:grid;
+      grid-template-columns: 1fr 88px 88px;
+      gap: 8px;
+      align-items:center;
+    }
+
+    .settingsGrid label {
+      font-size: 12px;
+      color:#444;
+    }
+
+    .settingsGrid .wide {
+      grid-column: span 2;
+      width: auto;
+    }
+
+    .settingsHint {
+      margin-top: 10px;
+      font-size: 12px;
+      color:#666;
+    }
+
+    .gsdReadout {
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background:#f7f7f7;
+      font-size: 12px;
+      color:#333;
+      display:flex;
+      justify-content:space-between;
+      gap: 8px;
+    }
+
+    .gsdValue {
+      font-weight: 700;
+      white-space: nowrap;
+    }
 
     /* ---------- ROUND FLOATING BUTTON ---------- */
     #floatingSurveyBtn {
@@ -80,12 +151,48 @@
     <span class="pill">Default Alt (m):</span>
     <input id="altInput" type="number" value="10" step="1" min="1" max="20" />
 
+    <span class="divider"></span>
+    <button id="settingsBtn" title="Camera, overlap and turnaround settings">Parameters</button>
     <button id="setHomeBtn" title="Click then click on map">Set Home</button>
     <button id="clearHomeBtn" title="Remove Home marker">Clear Home</button>
 
     <button id="exportCsvBtn">Export CSV</button>
 
     <!-- Generate Survey REMOVED from here -->
+  </div>
+
+  <div id="settingsPanel" role="dialog" aria-modal="false" aria-labelledby="settingsTitle">
+    <div class="settingsHeader">
+      <div id="settingsTitle" class="settingsTitle">Survey Parameters</div>
+      <button id="closeSettingsBtn" title="Close parameters">Close</button>
+    </div>
+
+    <div class="settingsGrid">
+      <label for="sensorWidthInput">Sensor W/H (mm)</label>
+      <input id="sensorWidthInput" type="number" value="3.68" step="0.01" min="0.01" />
+      <input id="sensorHeightInput" type="number" value="2.76" step="0.01" min="0.01" />
+
+      <label for="focalLengthInput">Focal length (mm)</label>
+      <input id="focalLengthInput" class="wide" type="number" value="3.04" step="0.01" min="0.01" />
+
+      <label for="imageWidthInput">Image W/H (px)</label>
+      <input id="imageWidthInput" type="number" value="3280" step="1" min="1" />
+      <input id="imageHeightInput" type="number" value="2474" step="1" min="1" />
+
+      <label for="frontOverlapInput">Overlap F/S (%)</label>
+      <input id="frontOverlapInput" type="number" value="25" step="1" min="0" max="95" />
+      <input id="sideOverlapInput" type="number" value="25" step="1" min="0" max="95" />
+
+      <label for="turnaroundInput">Turnaround (m)</label>
+      <input id="turnaroundInput" class="wide" type="number" value="3" step="0.5" min="0" max="100" />
+    </div>
+
+    <div class="gsdReadout">
+      <span>GSD</span>
+      <span id="gsdValue" class="gsdValue">-- cm/px</span>
+    </div>
+
+    <div class="settingsHint">Changes apply the next time you press the blue button.</div>
   </div>
 
   <!-- ROUND FLOATING BUTTON -->
@@ -98,19 +205,101 @@
 
   <script>
     const DEFAULT_ALT = 10;
+    const DEFAULT_CAMERA = {
+      front_overlap_pct: 25,
+      side_overlap_pct: 25,
+      sensor_width_mm: 3.68,
+      sensor_height_mm: 2.76,
+      focal_length_mm: 3.04,
+      image_width_px: 3280,
+      image_height_px: 2474
+    };
+    const DEFAULT_TURNAROUND = 3;
     let lastWaypoints = [];
     let homeLatLng = null;
     let homeMarker = null;
     let pickHomeMode = false;
-    const altInputEl = document.getElementById('altInput');
-    function clampAltitudeInput() {
-      const v = Number(altInputEl.value);
+    function clampNumberInput(input, min, max) {
+      const v = Number(input.value);
       if (!Number.isFinite(v)) return;
-      if (v < 1) altInputEl.value = '1';
-      else if (v > 20) altInputEl.value = '20';
+      if (v < min) input.value = String(min);
+      else if (v > max) input.value = String(max);
     }
-    altInputEl.addEventListener('input', clampAltitudeInput);
-    altInputEl.addEventListener('blur', clampAltitudeInput);
+    function bindClamp(id, min, max) {
+      const el = document.getElementById(id);
+      const clamp = () => clampNumberInput(el, min, max);
+      el.addEventListener('input', clamp);
+      el.addEventListener('blur', clamp);
+    }
+    function readPositiveNumber(id, fallback) {
+      const v = Number(document.getElementById(id).value);
+      return Number.isFinite(v) && v > 0 ? v : fallback;
+    }
+    function readRangeNumber(id, fallback, min, max) {
+      const v = Number(document.getElementById(id).value);
+      return Number.isFinite(v) && v >= min && v <= max ? v : fallback;
+    }
+
+    function computeGsdCmPerPixel() {
+      const altitude = readRangeNumber('altInput', DEFAULT_ALT, 1, 20);
+      const sensorWidth = readPositiveNumber('sensorWidthInput', DEFAULT_CAMERA.sensor_width_mm);
+      const sensorHeight = readPositiveNumber('sensorHeightInput', DEFAULT_CAMERA.sensor_height_mm);
+      const focalLength = readPositiveNumber('focalLengthInput', DEFAULT_CAMERA.focal_length_mm);
+      const imageWidth = readPositiveNumber('imageWidthInput', DEFAULT_CAMERA.image_width_px);
+      const imageHeight = readPositiveNumber('imageHeightInput', DEFAULT_CAMERA.image_height_px);
+      const gsdWidthCm = ((altitude * sensorWidth / focalLength) / imageWidth) * 100;
+      const gsdHeightCm = ((altitude * sensorHeight / focalLength) / imageHeight) * 100;
+      return (gsdWidthCm + gsdHeightCm) / 2;
+    }
+
+    function updateGsdReadout() {
+      const gsdValue = document.getElementById('gsdValue');
+      const gsd = computeGsdCmPerPixel();
+      gsdValue.textContent = Number.isFinite(gsd) ? `${gsd.toFixed(2)} cm/px` : '-- cm/px';
+    }
+
+    function bindGsdUpdates(id) {
+      const el = document.getElementById(id);
+      el.addEventListener('input', updateGsdReadout);
+      el.addEventListener('blur', updateGsdReadout);
+    }
+
+    bindClamp('altInput', 1, 20);
+    bindClamp('frontOverlapInput', 0, 95);
+    bindClamp('sideOverlapInput', 0, 95);
+    bindClamp('turnaroundInput', 0, 100);
+    [
+      'altInput',
+      'sensorWidthInput',
+      'sensorHeightInput',
+      'focalLengthInput',
+      'imageWidthInput',
+      'imageHeightInput'
+    ].forEach(bindGsdUpdates);
+    updateGsdReadout();
+
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+
+    function setSettingsOpen(open) {
+      settingsPanel.classList.toggle('open', open);
+      settingsBtn.classList.toggle('active', open);
+      settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    settingsBtn.setAttribute('aria-haspopup', 'dialog');
+    settingsBtn.setAttribute('aria-expanded', 'false');
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setSettingsOpen(!settingsPanel.classList.contains('open'));
+    });
+    closeSettingsBtn.addEventListener('click', () => setSettingsOpen(false));
+    settingsPanel.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => setSettingsOpen(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setSettingsOpen(false);
+    });
 
     // Map
     const map = L.map('map', { maxZoom: 22 }).setView([39.101418, 26.440039], 17);
@@ -268,7 +457,17 @@
       const altitude = Number(document.getElementById('altInput').value);
       const payload = {
         polygon,
-        altitude_m: Number.isFinite(altitude) && altitude > 0 && altitude <= 20 ? altitude : DEFAULT_ALT
+        altitude_m: Number.isFinite(altitude) && altitude > 0 && altitude <= 20 ? altitude : DEFAULT_ALT,
+        camera: {
+          sensor_width_mm: readPositiveNumber('sensorWidthInput', DEFAULT_CAMERA.sensor_width_mm),
+          sensor_height_mm: readPositiveNumber('sensorHeightInput', DEFAULT_CAMERA.sensor_height_mm),
+          focal_length_mm: readPositiveNumber('focalLengthInput', DEFAULT_CAMERA.focal_length_mm),
+          image_width_px: Math.round(readPositiveNumber('imageWidthInput', DEFAULT_CAMERA.image_width_px)),
+          image_height_px: Math.round(readPositiveNumber('imageHeightInput', DEFAULT_CAMERA.image_height_px)),
+          front_overlap_pct: readRangeNumber('frontOverlapInput', DEFAULT_CAMERA.front_overlap_pct, 0, 95),
+          side_overlap_pct: readRangeNumber('sideOverlapInput', DEFAULT_CAMERA.side_overlap_pct, 0, 95)
+        },
+        turnaround_m: readRangeNumber('turnaroundInput', DEFAULT_TURNAROUND, 0, 100)
       };
 
       if (homeLatLng) {
