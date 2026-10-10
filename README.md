@@ -1,6 +1,30 @@
 # UAV Survey Waypoint Generator
 
 A web-based tool for planning UAV mapping surveys. The user draws a survey polygon on an interactive satellite map, optionally selects a home position, and the application generates an optimized sequence of survey waypoints.
+
+## Part of an End-to-End UAV Mapping System
+
+This repository contains the mission-planning component of a larger UAV mapping system developed as part of the SciDrones project.
+
+The system is organized into two separate software components:
+
+**1. [UAV Survey Waypoint Generator](https://github.com/nickefs/citizen-drone-survey-planner)**
+
+A web-based mission planner that generates survey routes from user-defined geographic areas, taking into account camera geometry, image overlap, flight altitude, and route efficiency.
+
+**2. [UAV Companion Computer](https://github.com/nickefs/citizen-drone-companion-computer)**
+
+Raspberry Pi software responsible for converting survey waypoints into ArduPilot-compatible missions, communicating with the flight controller via MAVLink, managing camera triggering, and storing geotagged aerial images.
+
+### End-to-End Workflow
+
+1. Define a survey area on the interactive map.
+2. Generate and optimize the survey waypoints.
+3. Export the mission as a CSV file.
+4. Import the mission into the Raspberry Pi companion-computer software.
+5. Convert and upload the mission to the flight controller via MAVLink.
+6. Execute the autonomous survey and capture geotagged aerial imagery.
+
 ## Preview
 
 ![UAV Survey Waypoint Generator](docs/screenshots/survey-example.png)
