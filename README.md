@@ -2,6 +2,11 @@
 
 A web-based tool for planning UAV mapping surveys. The user draws a survey polygon on an interactive satellite map, optionally selects a home position, and the application generates an optimized sequence of survey waypoints.
 
+## Preview
+
+![UAV Survey Waypoint Generator](docs/screenshots/survey-example.png)
+
+
 ## Part of an End-to-End UAV Mapping System
 
 This repository contains the mission-planning component of a larger UAV mapping system developed as part of the SciDrones project.
@@ -25,9 +30,6 @@ Raspberry Pi software responsible for converting survey waypoints into ArduPilot
 5. Convert and upload the mission to the flight controller via MAVLink.
 6. Execute the autonomous survey and capture geotagged aerial imagery.
 
-## Preview
-
-![UAV Survey Waypoint Generator](docs/screenshots/survey-example.png)
 
 ## Features
 
