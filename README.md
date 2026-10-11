@@ -30,7 +30,8 @@ Raspberry Pi software responsible for converting survey waypoints into ArduPilot
 5. Convert and upload the mission to the flight controller via MAVLink.
 6. Execute the autonomous survey and capture geotagged aerial imagery.
 
-
+## Complete System Architecture
+```mermaid
 flowchart TD
     subgraph S["Survey Planner"]
         A["Leaflet Web Interface"] --> B["Node.js / Express"]
@@ -47,7 +48,7 @@ flowchart TD
     G --> H["ArduPilot Flight Controller"]
     H --> I["Autonomous Survey Flight"]
     H -->|"MAVLink Telemetry"| K
-  
+  ```
 
 
 ## Features
