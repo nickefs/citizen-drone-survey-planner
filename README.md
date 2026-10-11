@@ -31,6 +31,25 @@ Raspberry Pi software responsible for converting survey waypoints into ArduPilot
 6. Execute the autonomous survey and capture geotagged aerial imagery.
 
 
+flowchart TD
+    subgraph S["Survey Planner"]
+        A["Leaflet Web Interface"] --> B["Node.js / Express"]
+        B --> C["C++ Survey Generator"]
+        C --> D["Waypoint Visualization / CSV"]
+    end
+    subgraph P["Raspberry Pi Companion Computer"]
+        E["Flask Web Portal"] --> F["Mission Conversion"]
+        F --> G["MAVLink Mission Upload"]
+        K["Vehicle Position Feedback"] --> L["Camera Triggering"]
+        L --> M["Geotagged Aerial Images"]
+    end
+    D -->|"CSV Mission"| E
+    G --> H["ArduPilot Flight Controller"]
+    H --> I["Autonomous Survey Flight"]
+    H -->|"MAVLink Telemetry"| K
+  
+
+
 ## Features
 
 - Interactive satellite map using Leaflet and Leaflet Draw
