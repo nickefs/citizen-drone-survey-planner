@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111113">
+<title>Mission Portal Demo</title>
+<script>
+  try { const t = localStorage.getItem("portalTheme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<style>
+:root{color-scheme:light;--bg:#f4f4f5;--panel:#fff;--soft:#f0f0f2;--text:#111113;--muted:#585860;--line:#e4e4e7;
+--border:#c3c3ca;--primary:#111113;--primary-hover:#2b2b2f;--on-primary:#fff;
+--ok:#1a7f37;--fly:#0b5cad;--bad:#c62828;--busy:#8a5a00;--idle:#585860}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121417;--panel:#1b1e22;--soft:#25292f;
+--text:#f4f4f5;--muted:#b7bcc4;--line:#343943;--border:#545b67;--primary:#f4f4f5;--primary-hover:#d8dbe0;--on-primary:#111113;
+--ok:#4ade80;--fly:#93c5fd;--bad:#ff9a9a;--busy:#fcd34d;--idle:#b7bcc4}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121417;--panel:#1b1e22;--soft:#25292f;
+--text:#f4f4f5;--muted:#b7bcc4;--line:#343943;--border:#545b67;--primary:#f4f4f5;--primary-hover:#d8dbe0;--on-primary:#111113;
+--ok:#4ade80;--fly:#93c5fd;--bad:#ff9a9a;--busy:#fcd34d;--idle:#b7bcc4}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);
+font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+button,input{font:inherit}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--text);outline-offset:2px}
+main{max-width:560px;min-height:100dvh;margin:0 auto;padding:27px 28px 40px;background:var(--panel);
+box-shadow:0 0 32px rgba(0,0,0,.10)}
+.brand{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.13em}
+.brand-mark{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--border)}
+.brand-mark svg{width:24px;height:24px;display:block}
+.prefs{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:18px}
+.prefs-label{color:var(--muted);font-size:11px;font-weight:700}
+.opts{display:flex}
+.opts button{min-height:31px;padding:5px 9px;border:1px solid var(--border);background:var(--panel);color:var(--text);
+font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.035em;cursor:pointer}
+.opts button+button{border-left:0}
+.opts button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.heading{margin:28px 0 20px}
+.eyebrow{color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.16em}
+h1{margin:9px 0 10px;font-size:31px;font-weight:600;line-height:1.1;letter-spacing:-.04em}
+.heading p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+.status{position:sticky;top:0;z-index:5;margin:0 0 6px;padding:13px 14px 13px 16px;background:var(--soft);
+border:1px solid var(--line);border-left:4px solid var(--idle);box-shadow:0 6px 14px rgba(0,0,0,.06)}
+.status .big{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;letter-spacing:-.01em}
+.status .big::before{content:"";width:9px;height:9px;flex:none;background:currentColor}
+.status .small{font-size:13px;margin-top:2px;color:var(--muted);word-break:break-word}
+.status.tone-ok{border-left-color:var(--ok)} .status.tone-ok .big{color:var(--ok)}
+.status.tone-fly{border-left-color:var(--fly)} .status.tone-fly .big{color:var(--fly)}
+.status.tone-bad{border-left-color:var(--bad)} .status.tone-bad .big{color:var(--bad)}
+.status.tone-busy{border-left-color:var(--busy)} .status.tone-busy .big{color:var(--busy)}
+.status.tone-idle .big{color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:11px;background:var(--line);border:1px solid var(--line)}
+.stat{background:var(--panel);padding:7px 9px}
+.stat b{display:block;font-size:19px;line-height:1.2}
+.stat span{color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.card{border-top:1px solid var(--line);padding:21px 0}
+.section-heading{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.step-number{display:inline-grid;place-items:center;width:26px;height:26px;flex:none;background:var(--soft);
+font-size:11px;font-weight:800}
+h2{margin:0 0 10px;font-size:17px;letter-spacing:-.02em}
+.section-heading h2{margin:0}
+.msg{white-space:pre-wrap;font-size:12px;color:var(--muted);margin:10px 0 0;word-break:break-word}
+.err{color:var(--bad);font-size:12px;margin:8px 0 0;word-break:break-word}
+.err:empty,.msg:empty{display:none}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.5}
+.btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:50px;margin-top:14px;
+padding:12px 15px;border:1px solid var(--primary);background:var(--primary);color:var(--on-primary);cursor:pointer;
+font-size:14px;font-weight:750;text-transform:uppercase;letter-spacing:.035em;text-align:left}
+.btn:hover:not(:disabled){background:var(--primary-hover)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn .arrow{font-size:20px;line-height:1}
+.btn.alt{background:var(--panel);color:var(--text);border-color:var(--border);font-size:13px;font-weight:700}
+.btn.alt:hover:not(:disabled){background:var(--soft)}
+.btn.stop{background:var(--panel);color:var(--bad);border-color:var(--bad)}
+.btn.stop:hover:not(:disabled){background:var(--soft)}
+.file{display:block;margin-top:4px;padding:13px;border:1px dashed var(--border);background:var(--soft);
+font-size:13px;font-weight:700}
+.file input{display:block;width:100%;margin-top:9px;font-size:14px;color:var(--text)}
+.field-label{display:block;margin:14px 0 7px;font-size:13px;font-weight:700}
+.seg{display:flex;margin-top:4px}
+.seg label{flex:1;display:block}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:flex;align-items:center;justify-content:center;min-height:42px;padding:8px 6px;border:1px solid var(--border);
+background:var(--panel);color:var(--text);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.035em;cursor:pointer}
+.seg label+label span{border-left:0}
+.seg input:checked+span{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.seg input:focus-visible+span{outline:3px solid var(--text);outline-offset:2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.grid2 label,.inline label{font-size:12px;font-weight:700;color:var(--muted)}
+.grid2 input,.inline input{display:block;width:100%;margin-top:6px;min-height:44px;padding:8px 11px;border:1px solid var(--border);
+background:var(--panel);color:var(--text);font-size:16px;font-weight:600}
+a.dl{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:44px;margin-top:12px;padding:10px 13px;
+border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:13px;font-weight:700;
+text-transform:uppercase;letter-spacing:.035em}
+a.dl:hover{background:var(--soft)}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;padding:13px;border:1px solid var(--line);background:var(--soft)}
+.fact span{display:block;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.fact b{font-size:16px}
+.usage{margin-top:12px;padding:12px 13px;border:1px solid var(--line);border-left:4px solid var(--idle);background:var(--panel)}
+.usage .big{font-size:17px;font-weight:700}
+.usage .small{font-size:12px;color:var(--muted)}
+.usage.tone-ok{border-left-color:var(--ok)} .usage.tone-ok .big{color:var(--ok)}
+.usage.tone-busy{border-left-color:var(--busy)} .usage.tone-busy .big{color:var(--busy)}
+.usage.tone-bad{border-left-color:var(--bad)} .usage.tone-bad .big{color:var(--bad)}
+.meter{height:8px;background:var(--soft);overflow:hidden;margin-top:9px;border:1px solid var(--line)}
+.meter i{display:block;height:100%}
+.meter .tone-ok{background:var(--ok)} .meter .tone-busy{background:var(--busy)} .meter .tone-bad{background:var(--bad)}
+.inline{display:flex;gap:8px;align-items:flex-end;margin-top:14px}
+.inline label{flex:1}
+.inline .btn{width:auto;margin:0;min-height:44px;padding:8px 16px;background:var(--panel);color:var(--text);border-color:var(--border);font-size:12px}
+.inline .btn:hover{background:var(--soft)}
+.photo{margin-top:12px}
+.photo img{display:block;width:100%;height:auto;border:1px solid var(--line);background:var(--soft)}
+.safety-note{margin-top:14px;padding-left:9px;border-left:2px solid var(--border);color:var(--muted);font-size:11px}
+@media (max-width:600px){main{padding:22px 20px 34px;box-shadow:none}.heading{margin:20px 0 18px}h1{font-size:29px}}
+</style>
+</head><body><main>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" fill="#111113"/>
+<path d="M220 220 148 148m144 72 72-72M220 292l-72 72m144-72 72 72" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+<g fill="#111113" stroke="#fff" stroke-width="22"><circle cx="130" cy="130" r="43"/><circle cx="382" cy="130" r="43"/>
+<circle cx="130" cy="382" r="43"/><circle cx="382" cy="382" r="43"/></g>
+<rect x="204" y="204" width="104" height="104" rx="28" fill="#fff"/><circle cx="256" cy="256" r="20" fill="#111113"/>
+</svg></span><span>MISSION <strong>PORTAL</strong></span></div>
+  <div class="prefs">
+    <span class="prefs-label">Appearance</span>
+    <div class="opts" role="group" aria-label="Appearance">
+      <button type="button" data-theme-choice="system">Auto</button><button type="button" data-theme-choice="light">Light</button><button type="button" data-theme-choice="dark">Dark</button>
+    </div>
+  </div>
+  <div class="heading">
+    <span class="eyebrow">COMPANION COMPUTER</span>
+    <h1>Fly your survey</h1>
+    <p>Upload the planner's waypoint CSV, check the camera, then start the flight.</p>
+  </div>
+
+  <div id="statusBar" class="status tone-idle">
+    <div class="big" id="stateLabel">Ready - upload a mission</div>
+    <div class="small" id="workerMsg">Connected to flight controller. Upload a mission.</div>
+    <div class="stats">
+      <div class="stat"><b id="photos">0</b><span>photos</span></div>
+      <div class="stat"><b id="items">-</b><span>mission items</span></div>
+      <div class="stat"><b id="errors">0</b><span>photo errors</span></div>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="section-heading"><span class="step-number">01</span><h2>Mission</h2></div>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <label class="file">Waypoint CSV from the planner
+        <input id="fileInput" type="file" name="file" accept=".csv,.txt,text/csv,text/plain">
+      </label>
+      <span class="field-label">Camera trigger</span>
+      <div class="seg" role="radiogroup" aria-label="Camera trigger">
+        <label><input type="radio" name="trigger_mode" value="distance" checked><span>By distance</span></label>
+        <label><input type="radio" name="trigger_mode" value="waypoint"><span>At waypoints</span></label>
+      </div>
+      <button class="btn" type="submit" id="uploadBtn" >Upload &amp; send to drone <span class="arrow" aria-hidden="true">→</span></button>
+    </form>
+    <p class="msg" id="portalStatus"></p>
+    <a class="dl" id="downloadLink" href="#" style="display:none">Download mission file <span aria-hidden="true">↓</span></a>
+  </section>
+
+  <section class="card" id="demoSummary" style="display:none">
+    <h2>Mission summary</h2>
+    <div class="facts"><div class="fact"><span>Path length</span><b>292 m</b></div><div class="fact"><span>Est. flight time</span><b>6:52 min</b></div><div class="fact"><span>Photos (approx.)</span><b>~13</b></div><div class="fact"><span>Camera trigger</span><b>every 7.5 m</b></div><div class="fact"><span>Survey altitude</span><b>10 m</b></div><div class="fact"><span>Takeoff altitude</span><b>10 m</b></div><div class="fact"><span>Speed</span><b>2 m/s</b></div><div class="fact"><span>Waypoints</span><b>14</b></div><div class="fact"><span>GSD</span><b>0.38 cm/px</b></div><div class="fact"><span>Photo footprint</span><b>12 × 9 m</b></div><div class="fact"><span>Survey area</span><b>0.21 ha</b></div><div class="fact"><span>End of mission</span><b>Return home + land</b></div></div>
+    
+    <div class="usage tone-ok">
+      <div class="big">38% of flight time</div>
+      <div class="meter"><i class="tone-ok" style="width:38%"></i></div>
+      <div class="small" style="margin-top:6px">Fits comfortably in one battery. (6:52 of 18 min)</div>
+    </div>
+    
+    <form class="inline" action="/set_flight_time" method="post">
+      <label>Drone flight time (min, full battery)
+        <input type="number" inputmode="decimal" min="1" max="120" step="0.5" name="max_flight_min"
+               value="18" placeholder="e.g. 18">
+      </label>
+      <button class="btn" type="submit">Save</button>
+    </form>
+    <p class="hint">Estimate only. It assumes take-off near the first survey point, uses the flight controller's
+    climb/descent/landing speeds, and is on the safe side (slower) for the return leg. Wind is not included.</p>
+  </section>
+
+  <section class="card">
+    <div class="section-heading"><span class="step-number">02</span><h2>Camera</h2></div>
+    <form action="/set_camera" method="post">
+      <span class="field-label">Exposure</span>
+      <div class="seg" role="radiogroup" aria-label="Exposure">
+        <label><input type="radio" name="camera_mode" value="auto" checked><span>Auto</span></label>
+        <label><input type="radio" name="camera_mode" value="manual" ><span>Manual</span></label>
+      </div>
+      <div class="grid2">
+        <label>Exposure (µs)
+          <input type="number" inputmode="numeric" min="1" step="1" name="exposure_time" value="1200">
+        </label>
+        <label>Analogue gain
+          <input type="number" inputmode="decimal" min="0.1" step="0.1" name="analogue_gain" value="1.0">
+        </label>
+      </div>
+      <p class="hint">Now: <span id="cameraText">Auto exposure</span>. Values are used only in Manual.</p>
+      <button class="btn" type="submit">Apply camera settings <span class="arrow" aria-hidden="true">→</span></button>
+    </form>
+    <button class="btn alt" id="testBtn" type="button" >Take test photo <span class="arrow" aria-hidden="true">◎</span></button>
+    <p class="hint" id="testText">Takes one photo with the current settings (on the ground only).</p>
+    <div class="photo" id="testPhotoBox" style="display:none">
+      <a id="testFullLink" href="/test_photo_full.jpg?v=0" target="_blank">
+        <img id="testImg" alt="Test photo" src="">
+      </a>
+      <p class="hint">Tap the photo to open it in full resolution.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-heading"><span class="step-number">03</span><h2>Fly</h2></div>
+    <form action="/start_flight" method="post"
+          onsubmit="return confirm('ARM the motors and start the mission?\n\nProps clear, area safe, RC in hand?');">
+      <button class="btn go" id="startBtn" type="submit" disabled>Start flight <span class="arrow" aria-hidden="true">→</span></button>
+    </form>
+    <p class="hint" id="startReason">No mission confirmed on the flight controller yet</p>
+    <p class="err" id="lastError"></p>
+    <p class="safety-note">Props clear, area safe and RC in hand before you start. The drone arms as soon as you confirm.</p>
+  </section>
+
+  <section class="card">
+    <div class="section-heading"><span class="step-number">04</span><h2>Finish</h2></div>
+    <form action="/finish" method="post" onsubmit="return confirm('Stop the worker and turn off the hotspot?');">
+      <button class="btn stop" id="finishBtn" type="submit" >Finish &amp; close hotspot</button>
+    </form>
+    <p class="hint">Disabled while the drone is flying, so photo capture is never stopped mid-air.</p>
+  </section>
+</main>
+<script>
+  (function () {
+    const root = document.documentElement;
+    const btns = document.querySelectorAll("[data-theme-choice]");
+    function show(choice) {
+      btns.forEach((b) => b.setAttribute("aria-pressed", b.dataset.themeChoice === choice ? "true" : "false"));
+    }
+    show(root.dataset.theme || "system");
+    btns.forEach((b) => b.addEventListener("click", () => {
+      const choice = b.dataset.themeChoice;
+      if (choice === "system") delete root.dataset.theme; else root.dataset.theme = choice;
+      try { if (choice === "system") localStorage.removeItem("portalTheme"); else localStorage.setItem("portalTheme", choice); } catch (e) {}
+      show(choice);
+    }));
+  })();
+  const $ = (id) => document.getElementById(id);
+  const fileInput = $("fileInput");
+  if (fileInput) fileInput.addEventListener("change", () => { $("downloadLink").style.display = "none"; });
+  let testVer = 0;
+  let testWaiting = false;
+  let testId = null;
+  $("testBtn").addEventListener("click", async () => {
+    $("testBtn").disabled = true;
+    $("testText").textContent = "Taking test photo...";
+    testWaiting = true;
+    try {
+      const r = await fetch("/test_photo", {method: "POST"});
+      const j = await r.json();
+      testId = j.id || null;
+      if (!j.ok) { testWaiting = false; $("testText").textContent = j.error || "Could not take a test photo"; }
+    } catch (e) { testWaiting = false; $("testText").textContent = "Lost connection to the Pi"; }
+  });
+  async function refresh() {
+    try {
+      const r = await fetch("/api/status", {cache: "no-store"});
+      const s = await r.json();
+      $("statusBar").className = "status tone-" + s.state_tone;
+      $("stateLabel").textContent = s.state_label;
+      $("workerMsg").textContent = s.worker_message || "";
+      $("photos").textContent = s.photos;
+      $("items").textContent = s.mission_count || "-";
+      $("errors").textContent = (s.capture_errors || 0) + (s.metadata_errors || 0);
+      $("portalStatus").textContent = s.portal_status || "";
+      $("cameraText").textContent = s.camera_text;
+      $("startBtn").disabled = !s.start_allowed;
+      $("startReason").textContent = s.start_reason || "";
+      $("lastError").textContent = s.last_error || "";
+      $("finishBtn").disabled = s.in_flight;
+      $("uploadBtn").disabled = s.in_flight;
+      $("downloadLink").style.display = s.download_ready ? "" : "none";
+      if (!testWaiting) $("testBtn").disabled = !s.test_allowed;
+      if (s.test_photo_ver && s.test_photo_ver !== testVer) {
+        testVer = s.test_photo_ver;
+        testWaiting = false;
+        $("testImg").src = "/test_photo.jpg?v=" + testVer;
+        $("testFullLink").href = "/test_photo_full.jpg?v=" + testVer;
+        $("testPhotoBox").style.display = "";
+        $("testBtn").disabled = !s.test_allowed;
+      }
+      if (s.test_photo_text && !testWaiting) $("testText").textContent = s.test_photo_text;
+      // worker finished our command but no new photo appeared -> it failed
+      if (testWaiting && testId && s.last_command_id === testId && s.test_photo_ver === testVer) {
+        testWaiting = false;
+        $("testText").textContent = s.last_error || "Test photo failed";
+        $("testBtn").disabled = !s.test_allowed;
+      }
+    } catch (e) {
+      $("statusBar").className = "status tone-bad";
+      $("stateLabel").textContent = "Lost connection to the Pi";
+    }
+  }
+  setInterval(refresh, 2000);
+</script>
+<script>window.__BASE_STATUS__ = {"test_photo_ver": 0, "last_command_id": "None", "test_photo_text": "", "test_allowed": true, "portal_status": "", "worker_text": "idle | Connected to flight controller. Upload a mission. | Camera: auto", "worker_message": "Connected to flight controller. Upload a mission.", "worker_state": "idle", "state_label": "Ready - upload a mission", "state_tone": "idle", "stale": false, "camera_text": "Auto exposure", "photos": 0, "capture_errors": 0, "metadata_errors": 0, "mission_count": 0, "last_error": "", "start_allowed": false, "start_reason": "No mission confirmed on the flight controller yet", "in_flight": false, "download_ready": false};</script>
+<script>// DEMO ONLY: fakes the Pi's answers so the real portal page can be clicked through. Nothing is sent to a drone.
+(function () {
+  const S = Object.assign({}, window.__BASE_STATUS__);
+  let flightStart = 0, uploadUntil = 0, testPending = null, testVer = 0, finished = false;
+  const LABEL = {
+    idle: ["Ready - upload a mission", "idle"], uploading: ["Uploading mission to drone", "busy"],
+    ready_to_start: ["Mission on drone - ready to fly", "ok"], starting: ["Arming and starting", "fly"],
+    flight_mode: ["Flying - taking photos", "fly"], mission_complete: ["Mission complete", "ok"],
+    finished: ["Finished", "idle"]
+  };
+  function setState(st, msg) {
+    S.worker_state = st; S.state_label = LABEL[st][0]; S.state_tone = LABEL[st][1]; S.worker_message = msg;
+    S.in_flight = ["starting", "flight_mode"].includes(st);
+    S.start_allowed = ["ready_to_start", "mission_complete"].includes(st) && !finished;
+    S.start_reason = S.start_allowed ? "" : (st === "uploading" ? "Worker is busy (uploading)" :
+      S.in_flight ? "Worker is busy (" + st + ")" : finished ? "Worker is not responding" : "");
+    S.test_allowed = !S.in_flight && st !== "uploading" && !finished;
+  }
+  function tick() {
+    const now = Date.now();
+    if (uploadUntil && now > uploadUntil) {
+      uploadUntil = 0; S.mission_count = 14; S.download_ready = true;
+      S.portal_status = "Mission converted (distance trigger) and sent to the worker.";
+      setState("ready_to_start", "Mission uploaded and confirmed (14 items)");
+    }
+    if (flightStart) {
+      const t = (now - flightStart) / 1000;
+      if (t < 4) setState("starting", "Arming and starting mission...");
+      else if (t < 34) { setState("flight_mode", "Mission running - waiting for camera triggers"); S.photos = Math.min(13, Math.floor((t - 6) / 2) + 1 > 0 ? Math.floor((t - 6) / 2) + 1 : 0); }
+      else { flightStart = 0; S.photos = 13; setState("mission_complete", "Landed and disarmed - 13 photos saved"); }
+    }
+    if (testPending && now > testPending.at) {
+      testVer = Date.now(); S.test_photo_ver = testVer; S.last_command_id = testPending.id; testPending = null;
+      const c = (S.camera_text || "").startsWith("Manual") ? "manual" : "auto";
+      S.test_photo_text = "Taken " + new Date().toTimeString().slice(0, 8) + " (" + c + "): 1200 µs, gain 1.0, ~5200 lux";
+    }
+  }
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async function (url, opts) {
+    const u = String(url);
+    const json = (o) => new Response(JSON.stringify(o), { headers: { "Content-Type": "application/json" } });
+    if (u.startsWith("/api/status")) { tick(); return json(S); }
+    if (u.startsWith("/test_photo")) { const id = String(Date.now()); testPending = { id, at: Date.now() + 2500 }; return json({ ok: true, id }); }
+    return realFetch(url, opts);
+  };
+  // fake "photo" for the test shot
+  function fakePhoto() {
+    const c = document.createElement("canvas"); c.width = 1280; c.height = 960; const g = c.getContext("2d");
+    const sky = g.createLinearGradient(0, 0, 0, 960); sky.addColorStop(0, "#5d8a3a"); sky.addColorStop(1, "#3f6b2a");
+    g.fillStyle = sky; g.fillRect(0, 0, 1280, 960);
+    for (let i = 0; i < 14; i++) { g.fillStyle = i % 2 ? "#6f9a45" : "#557f33"; g.fillRect(0, i * 70 + 20, 1280, 34); }
+    g.fillStyle = "#b9a37a"; g.fillRect(560, 0, 90, 960);
+    g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(0, 880, 1280, 80);
+    g.fillStyle = "#fff"; g.font = "bold 40px sans-serif"; g.fillText("DEMO TEST PHOTO (simulated)", 30, 935);
+    return c.toDataURL("image/jpeg", 0.8);
+  }
+  const img = document.getElementById("testImg"); let photoURL = null;
+  new MutationObserver(() => {
+    if (img.getAttribute("src") && img.getAttribute("src").startsWith("/test_photo")) {
+      photoURL = photoURL || fakePhoto(); img.src = photoURL;
+      document.getElementById("testFullLink").href = photoURL;
+    }
+  }).observe(img, { attributes: true, attributeFilter: ["src"] });
+  // forms: the real page posts and reloads; here we simulate the Pi's answer
+  document.addEventListener("submit", (e) => {
+    if (e.defaultPrevented) return;            // user pressed Cancel on a confirm
+    e.preventDefault();
+    const f = e.target, act = f.getAttribute("action");
+    if (act === "/upload") {
+      S.portal_status = "Converting mission and sending it to the drone..."; S.download_ready = false;
+      setState("uploading", "Uploading mission (14 items)..."); uploadUntil = Date.now() + 3000;
+      const sum = document.getElementById("demoSummary"); if (sum) sum.style.display = "";
+    } else if (act === "/set_camera") {
+      const m = f.querySelector('input[name="camera_mode"]:checked').value;
+      S.camera_text = m === "manual" ? "Manual · " + f.exposure_time.value + " µs · gain " + f.analogue_gain.value : "Auto exposure";
+    } else if (act === "/start_flight") {
+      flightStart = Date.now(); S.photos = 0;
+    } else if (act === "/finish") {
+      finished = true; S.portal_status = "Finished. Worker stopped and hotspot turned off."; setState("finished", "Worker stopped");
+    } else if (act === "/set_flight_time") {
+      alert("Demo: in the real portal this saves the flight time on the Pi and reloads the summary.");
+    }
+    setTimeout(() => window.refresh && window.refresh(), 50);
+  });
+  // demo banner
+  const b = document.createElement("div");
+  b.textContent = "DEMO · simulated drone, nothing is sent anywhere";
+  b.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9;padding:8px 12px;background:#111113;color:#fff;font:700 11px/1.3 system-ui,sans-serif;letter-spacing:.08em;text-align:center";
+  document.body.appendChild(b); document.querySelector("main").style.paddingBottom = "70px";
+  setInterval(() => window.refresh && window.refresh(), 1000);
+})();
+</script>
+</body></html>
